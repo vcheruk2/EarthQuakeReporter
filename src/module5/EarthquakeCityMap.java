@@ -13,6 +13,7 @@ import de.fhpotsdam.unfolding.marker.Marker;
 import de.fhpotsdam.unfolding.marker.MultiMarker;
 import de.fhpotsdam.unfolding.providers.Google;
 import de.fhpotsdam.unfolding.providers.MBTilesMapProvider;
+import de.fhpotsdam.unfolding.providers.OpenStreetMap;
 import de.fhpotsdam.unfolding.utils.MapUtils;
 import parsing.ParseFeed;
 import processing.core.PApplet;
@@ -20,8 +21,8 @@ import processing.core.PApplet;
 /** EarthquakeCityMap
  * An application with an interactive map displaying earthquake data.
  * Author: UC San Diego Intermediate Software Development MOOC team
- * @author Your name here
- * Date: July 17, 2015
+ * @author Venkata Ravichandra Cherukuri
+ * Date: April 06, 2019
  * */
 public class EarthquakeCityMap extends PApplet {
 	
@@ -70,7 +71,8 @@ public class EarthquakeCityMap extends PApplet {
 		    earthquakesURL = "2.5_week.atom";  // The same feed, but saved August 7, 2015
 		}
 		else {
-			map = new UnfoldingMap(this, 200, 50, 650, 600, new Google.GoogleMapProvider());
+			//map = new UnfoldingMap(this, 200, 50, 650, 600, new Google.GoogleMapProvider());
+			map = new UnfoldingMap(this, 200, 50, 650, 600, new OpenStreetMap.OpenStreetMapProvider());
 			// IF YOU WANT TO TEST WITH A LOCAL FILE, uncomment the next line
 		    //earthquakesURL = "2.5_week.atom";
 		}
@@ -135,8 +137,8 @@ public class EarthquakeCityMap extends PApplet {
 			lastSelected = null;
 		
 		}
-		selectMarkerIfHover(quakeMarkers);
 		selectMarkerIfHover(cityMarkers);
+		selectMarkerIfHover(quakeMarkers);
 	}
 	
 	// If there is a marker under the cursor, and lastSelected is null 
@@ -145,7 +147,17 @@ public class EarthquakeCityMap extends PApplet {
 	// 
 	private void selectMarkerIfHover(List<Marker> markers)
 	{
-		// TODO: Implement this method
+		for(int i = 0; i < markers.size(); i++)
+		{
+			CommonMarker marker = (CommonMarker) markers.get(i);
+
+			if(marker.isInside(map, mouseX, mouseY) && lastSelected == null)
+			{
+				lastSelected = marker;
+				lastSelected.setSelected(true);
+				break;
+			}
+		}
 	}
 	
 	/** The event handler for mouse clicks
@@ -156,11 +168,118 @@ public class EarthquakeCityMap extends PApplet {
 	@Override
 	public void mouseClicked()
 	{
-		// TODO: Implement this method
-		// Hint: You probably want a helper method or two to keep this code
-		// from getting too long/disorganized
+		Boolean[] is_city = new Boolean[1];
+		Marker[] marker = new Marker[1];
+
+		// Check if there is a marker at the clicked location.
+		Boolean is_marker_found = isMarkerPresent(mouseX, mouseY, is_city, marker);
+		double threat;
+		
+		if(!is_marker_found && lastClicked == null)
+			return;
+		else if(!is_marker_found && lastClicked != null)
+		{
+			unhideMarkers();
+			lastClicked = null;
+			return;
+		}
+		else if( is_marker_found )
+		{
+			unhideMarkers();		
+			
+			if(is_city[0])
+			{
+				hideAllOtherCityMarkers(marker[0]);
+				hideIrrelevantQuakeMarkers( marker[0]);	
+			}
+			else
+			{
+				threat = ((EarthquakeMarker) marker[0]).threatCircle();
+				hideIrrelevantCityMarkers( marker[0], threat );
+				hideAllOtherQuakeMarkers( marker[0] );
+			}
+			
+			lastClicked = (CommonMarker) marker[0];
+		}
+		else
+			System.out.println("Unknown case encountered");
 	}
 	
+	public void hideAllOtherQuakeMarkers( Marker cmarker )
+	{
+		for(Marker marker : quakeMarkers) {
+			if( !marker.equals(cmarker) )
+				marker.setHidden(true);
+		}
+	}
+
+	public void hideIrrelevantCityMarkers(Marker cmarker, double threatc )
+	{
+		Location given = cmarker.getLocation();
+		for(Marker marker : cityMarkers)
+		{
+			Location curr = marker.getLocation();
+			double dist = Math.abs( given.getDistance(curr));
+			
+			if( dist > threatc )
+				marker.setHidden(true);
+			else
+				marker.setHidden(false);
+		}
+	}
+	
+	public void hideIrrelevantQuakeMarkers( Marker cmarker )
+	{
+		double threatc;
+		Location given = cmarker.getLocation();
+		for(Marker marker : quakeMarkers) {
+			Location curr = marker.getLocation();
+			double dist = Math.abs( given.getDistance(curr));
+			threatc = ((EarthquakeMarker) marker).threatCircle();
+			
+			if ( dist > threatc )
+				marker.setHidden(true);
+			else
+				marker.setHidden(false);
+		}
+	}
+	
+	public void hideAllOtherCityMarkers( Marker cmarker )
+	{
+		for(Marker marker : cityMarkers) {
+			if( !marker.equals(cmarker) )
+				marker.setHidden(true);
+		}
+	}
+	
+	public boolean isMarkerPresent(int x, int y, Boolean[] is_city, Marker[] curr_marker)
+	{
+		for(int i = 0; i < cityMarkers.size(); i++)
+		{
+			Marker marker = cityMarkers.get(i);
+			
+			if(marker.isInside(map, x, y))
+			{
+				is_city[0] = true;
+				curr_marker[0] = marker;
+				return true;
+			}
+		}
+
+		for(int i = 0; i < quakeMarkers.size(); i++)
+		{
+			Marker marker = quakeMarkers.get(i);
+			
+			if(marker.isInside(map, x, y))
+			{
+				is_city[0] = false;
+				curr_marker[0] = marker;
+				return true;
+			}
+		}
+
+		return false;
+	}
 	
 	// loop over and unhide all markers
 	private void unhideMarkers() {
@@ -314,5 +433,4 @@ public class EarthquakeCityMap extends PApplet {
 		}
 		return false;
 	}
-
 }
